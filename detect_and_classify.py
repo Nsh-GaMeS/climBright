@@ -148,7 +148,7 @@ def detect_and_classify(detector, classifier, image_path, device, save_output=Tr
             'class_id': class_id,
             'class_name': class_name,
             'confidence': confidence,
-            'probs': probs.cpu().numpy()
+            'probs': probs.cpu().numpy(),
         })
         
         print(f"  Box {i+1}: {class_name} ({confidence:.2%}) | YOLO conf: {yolo_conf:.2%}")
