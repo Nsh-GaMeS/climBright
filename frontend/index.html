@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ClimbAI – Smart Route Analysis</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="navbar">
+    <h1>🧗‍♂️ ClimbAI</h1>
+    <nav>
+      <a href="#holds">Hold Classifier</a>
+      <a href="#wall">Wall Analysis</a>
+    </nav>
+  </header>
+
+  <main>
+
+    <!-- Hero -->
+    <section class="hero">
+      <h2>AI-Powered Rock Climbing Analysis</h2>
+      <p>
+        Upload climbing holds or full wall images to get
+        intelligent classifications and optimal climbing routes.
+      </p>
+    </section>
+
+    <!-- Hold Classifier -->
+    <section id="holds" class="card">
+      <h3>🪨 Hold Classifier</h3>
+      <p>Upload images of individual holds to classify grip type and difficulty.</p>
+
+      <div class="upload-box" id="holdUpload">
+        <input type="file" accept="image/*" hidden />
+        <span>Click or drag an image here</span>
+      </div>
+
+      <div class="preview" id="holdPreview"></div>
+
+      <div class="result-box">
+        <h4>Classification Result</h4>
+        <p class="placeholder">Waiting for AI output...</p>
+      </div>
+    </section>
+
+    <!-- Wall Analyzer -->
+    <section id="wall" class="card">
+      <h3>🧠 Wall Route Analyzer</h3>
+      <p>
+        Upload a full wall image to generate an optimal climbing path.
+      </p>
+
+      <div class="upload-box" id="wallUpload">
+        <input type="file" accept="image/*" hidden />
+        <span>Click or drag wall image here</span>
+      </div>
+
+      <div class="preview" id="wallPreview"></div>
+
+      <div class="result-box">
+        <h4>Optimal Route</h4>
+        <canvas id="routeCanvas"></canvas>
+        <p class="placeholder">Path visualization will appear here.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Built for Hackathons • CNN + Pathfinding • Frontend Prototype</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
