@@ -4,6 +4,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 import timm
+from timm.data import Mixup
+from timm.loss import SoftTargetCrossEntropy
 from tqdm import tqdm
 
 # =========================
@@ -18,6 +20,11 @@ PHASE_B_EPOCHS = 20
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_NAME = "convnext_tiny.in12k_ft_in1k"
 BEST_PATH = "best_convnext_two_phase.pt"
+# Regularization knobs
+MIXUP_ALPHA = 0.2        # 0.0 disables mixup
+CUTMIX_ALPHA = 1.0       # 0.0 disables cutmix
+RANDOM_ERASE_P = 0.25    # 0.0 disables random erasing
+DROP_PATH_RATE = 0.1     # stochastic depth for ConvNeXt
 # =========================
 
 def get_transforms():
@@ -28,8 +35,11 @@ def get_transforms():
     train_tf = transforms.Compose([
         transforms.RandomResizedCrop(224, scale=(0.7, 1.0)),
         transforms.RandomHorizontalFlip(0.5),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.02),
+        transforms.RandomGrayscale(p=0.05),
         transforms.ToTensor(),
         transforms.Normalize(mean, std),
+        transforms.RandomErasing(p=RANDOM_ERASE_P, value="random"),
     ])
 
     eval_tf = transforms.Compose([
@@ -90,7 +100,7 @@ def evaluate(model, loader, criterion):
 
     return total_loss / max(total, 1), correct / max(total, 1)
 
-def train_one_epoch(model, loader, optimizer, criterion, scaler, scheduler=None):
+def train_one_epoch(model, loader, optimizer, criterion, scaler, scheduler=None, mixup_fn=None):
     model.train()
     total, correct = 0, 0
     total_loss = 0.0
@@ -98,6 +108,12 @@ def train_one_epoch(model, loader, optimizer, criterion, scaler, scheduler=None)
     for x, y in tqdm(loader, leave=False):
         x, y = x.to(DEVICE), y.to(DEVICE)
         optimizer.zero_grad(set_to_none=True)
+
+        if mixup_fn is not None:
+            x, y = mixup_fn(x, y)
+            y_for_acc = y.argmax(dim=1)
+        else:
+            y_for_acc = y
 
         # Mixed precision on GPU
         with torch.cuda.amp.autocast(enabled=(DEVICE == "cuda")):
@@ -113,7 +129,7 @@ def train_one_epoch(model, loader, optimizer, criterion, scaler, scheduler=None)
 
         total_loss += loss.item() * y.size(0)
         pred = logits.argmax(1)
-        correct += (pred == y).sum().item()
+        correct += (pred == y_for_acc).sum().item()
         total += y.size(0)
 
     return total_loss / max(total, 1), correct / max(total, 1)
@@ -136,10 +152,25 @@ def main():
     train_ds, train_loader, val_loader = make_loaders()
     print("Class mapping:", train_ds.class_to_idx)
 
-    model = timm.create_model(MODEL_NAME, pretrained=True, num_classes=NUM_CLASSES).to(DEVICE)
+    model = timm.create_model(
+        MODEL_NAME,
+        pretrained=True,
+        num_classes=NUM_CLASSES,
+        drop_path_rate=DROP_PATH_RATE,
+    ).to(DEVICE)
 
-    # Loss with label smoothing (good for similar-looking classes)
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    # Mixup/cutmix create soft labels; fall back to smoothed CE when disabled
+    use_mixup = (MIXUP_ALPHA > 0.0) or (CUTMIX_ALPHA > 0.0)
+    mixup_fn = Mixup(
+        mixup_alpha=MIXUP_ALPHA,
+        cutmix_alpha=CUTMIX_ALPHA,
+        prob=1.0 if use_mixup else 0.0,
+        switch_prob=0.5,
+        num_classes=NUM_CLASSES,
+    ) if use_mixup else None
+
+    criterion_train = SoftTargetCrossEntropy() if use_mixup else nn.CrossEntropyLoss(label_smoothing=0.1)
+    criterion_eval = nn.CrossEntropyLoss()
 
     # AMP scaler (enabled only on CUDA)
     scaler = torch.cuda.amp.GradScaler(enabled=(DEVICE == "cuda"))
@@ -159,8 +190,8 @@ def main():
     )
 
     for epoch in range(PHASE_A_EPOCHS):
-        tr_loss, tr_acc = train_one_epoch(model, train_loader, optA, criterion, scaler, scheduler=None)
-        va_loss, va_acc = evaluate(model, val_loader, criterion)
+        tr_loss, tr_acc = train_one_epoch(model, train_loader, optA, criterion_train, scaler, scheduler=None, mixup_fn=mixup_fn)
+        va_loss, va_acc = evaluate(model, val_loader, criterion_eval)
         print(f"[A {epoch+1}/{PHASE_A_EPOCHS}] train acc={tr_acc:.3f} loss={tr_loss:.4f} | val acc={va_acc:.3f} loss={va_loss:.4f}")
 
         if va_acc > best_val_acc:
@@ -185,8 +216,8 @@ def main():
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optB, T_max=total_steps)
 
     for epoch in range(PHASE_B_EPOCHS):
-        tr_loss, tr_acc = train_one_epoch(model, train_loader, optB, criterion, scaler, scheduler=scheduler)
-        va_loss, va_acc = evaluate(model, val_loader, criterion)
+        tr_loss, tr_acc = train_one_epoch(model, train_loader, optB, criterion_train, scaler, scheduler=scheduler, mixup_fn=mixup_fn)
+        va_loss, va_acc = evaluate(model, val_loader, criterion_eval)
         lr_now = optB.param_groups[0]["lr"]
 
         print(f"[B {epoch+1}/{PHASE_B_EPOCHS}] train acc={tr_acc:.3f} loss={tr_loss:.4f} | val acc={va_acc:.3f} loss={va_loss:.4f} | lr={lr_now:.2e}")
@@ -211,7 +242,7 @@ def main():
         print(f"No verification folder found at {os.path.join(DATA_DIR, 'real_val')} — skipping.")
     else:
         real_val_ds, real_val_loader = real_val
-        rv_loss, rv_acc = evaluate(model, real_val_loader, criterion)
+        rv_loss, rv_acc = evaluate(model, real_val_loader, criterion_eval)
         print(f"Verification set size: {len(real_val_ds)}")
         print(f"Verification accuracy: {rv_acc:.4f} | loss: {rv_loss:.4f}")
 

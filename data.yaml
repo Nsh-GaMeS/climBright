@@ -1,0 +1,6 @@
+path: C:/Users/sunna/Code/uottahacks/indoor-climbing-gym-hold-classification-dataset/Final_Dataset
+train: train/images
+val: valid/images
+test: test/images
+nc: 6
+names: [jug, pinch, crimp, sloper, pocket, volume]  # replace with your actual order

@@ -1,0 +1,9 @@
+opencv-python
+ultralytics
+torch
+numpy
+argparse
+Pillow
+torchvision
+tqdm
+pandas
