@@ -6,5 +6,5 @@
 /venv
 *.png
 *.jpg
-user.db
 __pycache__/
+users.db
