@@ -10,3 +10,4 @@ pandas
 sqlalchemy
 fastapi
 uvicorn
+google.genai
