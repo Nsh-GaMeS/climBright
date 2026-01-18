@@ -1,5 +1,10 @@
 const API_BASE = ""; // same origin as the Express server
-const FASTAPI_URL = "https://your-fastapi-host.example.com/analyze"; // placeholder
+
+async function getFastApiUrl() {
+  const res = await fetch("/config.json", { credentials: "include" });
+  const cfg = await res.json().catch(() => ({}));
+  return cfg.fastapiUrl || "";
+}
 
 async function apiJson(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -142,6 +147,12 @@ async function analyzeAndStoreHoldImage(file) {
     return;
   }
 
+  const fastapiUrl = await getFastApiUrl();
+  if (!fastapiUrl) {
+    setHoldResult("FASTAPI_URL is not configured. Set it in frontend/.env and restart the web server.", true);
+    return;
+  }
+
   setHoldResult("Encoding image and calling AI...");
 
   let imageBase64;
@@ -154,14 +165,18 @@ async function analyzeAndStoreHoldImage(file) {
 
   let aiJson = null;
   try {
-    const res = await fetch(FASTAPI_URL, {
+    const res = await fetch(fastapiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image_base64: imageBase64 }),
+      body: JSON.stringify({
+        filename: file.name,
+        content_type: file.type || "image/jpeg",
+        data: imageBase64,
+      }),
     });
 
     aiJson = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(aiJson?.error || `AI request failed (${res.status})`);
+    if (!res.ok) throw new Error(aiJson?.detail || aiJson?.error || `AI request failed (${res.status})`);
   } catch (err) {
     setHoldResult(`AI error: ${err.message}`, true);
     // still attempt to store the upload (without AI result) below
@@ -186,7 +201,7 @@ async function analyzeAndStoreHoldImage(file) {
         imageBase64,
         originalName: file.name,
         mimeType: file.type,
-        aiEndpoint: FASTAPI_URL,
+        aiEndpoint: fastapiUrl,
         aiResponseRaw: aiJson,
         holds: Array.isArray(holds)
           ? holds.map((h) => ({ raw: h, confidence: getHoldConfidence(h) }))

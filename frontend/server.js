@@ -10,6 +10,7 @@ const cookieParser = require("cookie-parser");
 const { requireAuth } = require("./src/middleware/auth");
 const authRoutes = require("./src/routes/auth");
 const imageRoutes = require("./src/routes/images");
+const wallRoutes = require("./src/routes/wall");
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -31,6 +32,12 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/config.json", (_req, res) => {
+  res.json({
+    fastapiUrl: process.env.FASTAPI_URL || "",
+  });
+});
+
 // Serve the prototype frontend pages without exposing the whole folder
 app.get("/", (_req, res) => res.redirect("/login"));
 app.get("/login", (_req, res) => res.sendFile(path.join(__dirname, "login.html")));
@@ -45,6 +52,7 @@ app.get("/wall.js", (_req, res) => res.sendFile(path.join(__dirname, "wall.js"))
 
 app.use("/api/auth", authRoutes);
 app.use("/api/images", requireAuth, imageRoutes);
+app.use("/api/wall", requireAuth, wallRoutes);
 
 async function start() {
   if (!MONGODB_URI) {

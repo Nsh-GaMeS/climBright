@@ -1,6 +1,7 @@
 opencv-python
 ultralytics
 torch
+timm
 numpy
 argparse
 Pillow
@@ -10,4 +11,4 @@ pandas
 sqlalchemy
 fastapi
 uvicorn
-google.genai
+google-genai

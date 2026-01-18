@@ -13,6 +13,12 @@ async function apiJson(path, options = {}) {
   return data;
 }
 
+async function getFastApiUrl() {
+  const res = await fetch("/config.json", { credentials: "include" });
+  const cfg = await res.json().catch(() => ({}));
+  return cfg.fastapiUrl || "";
+}
+
 async function requireSessionOrRedirect() {
   try {
     const data = await apiJson("/api/auth/me", { method: "GET" });
@@ -39,22 +45,43 @@ const wallImage = document.getElementById("wallImage");
 const wallWrapper = document.getElementById("wallImageWrapper");
 const holdInfoText = document.getElementById("holdInfoText");
 
-// DEMO data – replace with backend/FastAPI response later
-const demoHolds = [
-  { id: 1, x: 0.3, y: 0.7, type: "Crimp", difficulty: "V3", confidence: 0.88 },
-  { id: 2, x: 0.5, y: 0.5, type: "Jug", difficulty: "V2", confidence: 0.94 },
-  { id: 3, x: 0.7, y: 0.3, type: "Sloper", difficulty: "V5", confidence: 0.81 },
-];
+let currentHolds = [];
+let currentCoach = null;
 
-function renderHolds(holds) {
+function setInfoHtml(html) {
+  if (!holdInfoText) return;
+  holdInfoText.classList.remove("placeholder");
+  holdInfoText.innerHTML = html;
+}
+
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      const commaIdx = dataUrl.indexOf(",");
+      resolve(commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderHolds(holds, imgW, imgH) {
   if (!wallWrapper) return;
   document.querySelectorAll(".hold-marker").forEach((m) => m.remove());
 
   holds.forEach((hold) => {
+    const bbox = hold.bbox;
+    if (!Array.isArray(bbox) || bbox.length !== 4) return;
+    const [x1, y1, x2, y2] = bbox;
+    const cx = (x1 + x2) / 2;
+    const cy = (y1 + y2) / 2;
+
     const marker = document.createElement("div");
     marker.className = "hold-marker";
-    marker.style.left = `${hold.x * 100}%`;
-    marker.style.top = `${hold.y * 100}%`;
+    marker.style.left = `${(cx / imgW) * 100}%`;
+    marker.style.top = `${(cy / imgH) * 100}%`;
 
     marker.addEventListener("click", () => {
       selectHold(hold);
@@ -65,12 +92,97 @@ function renderHolds(holds) {
 }
 
 function selectHold(hold) {
-  if (!holdInfoText) return;
-  holdInfoText.innerHTML = `
-    <strong>Type:</strong> ${hold.type}<br/>
-    <strong>Difficulty:</strong> ${hold.difficulty}<br/>
-    <strong>Confidence:</strong> ${(hold.confidence * 100).toFixed(1)}%
-  `;
+  const conf = typeof hold.confidence === "number" ? hold.confidence : Number(hold.confidence || 0);
+  const pct = conf <= 1 ? conf * 100 : conf;
+  const inRouteA = Array.isArray(currentCoach?.routeA)
+    ? currentCoach.routeA.some((h) => h.id === hold.id)
+    : false;
+  const inRouteB = Array.isArray(currentCoach?.routeB)
+    ? currentCoach.routeB.some((h) => h.id === hold.id)
+    : false;
+
+  setInfoHtml(
+    `
+    <strong>Type:</strong> ${hold.type || "Unknown"}<br/>
+    <strong>Confidence:</strong> ${pct.toFixed(1)}%<br/>
+    <strong>In Route A:</strong> ${inRouteA ? "Yes" : "No"}<br/>
+    <strong>In Route B:</strong> ${inRouteB ? "Yes" : "No"}
+    `
+  );
+}
+
+function showCoachSummary(coach) {
+  if (!coach) return;
+  const difficulty = coach.difficulty || "Unknown";
+  const notes = coach.notes || "";
+  setInfoHtml(
+    `
+    <strong>Suggested Difficulty:</strong> ${difficulty}<br/>
+    <strong>Notes:</strong> ${notes}
+    `
+  );
+}
+
+async function analyzeWall(file) {
+  if (!file) return;
+
+  if (holdInfoText) {
+    holdInfoText.classList.add("placeholder");
+    holdInfoText.textContent = "Analyzing wall…";
+  }
+
+  const imageBase64 = await fileToBase64(file);
+  const base64Payload = String(imageBase64).includes(",")
+    ? String(imageBase64).split(",")[1]
+    : String(imageBase64);
+
+  // 1) Frontend calls FastAPI directly to get holds
+  const fastapiUrl = await getFastApiUrl();
+  if (!fastapiUrl) {
+    setInfoHtml('<span style="color:#ff7b72">FASTAPI_URL is not configured.</span>');
+    return;
+  }
+
+  let aiJson;
+  try {
+    const res = await fetch(fastapiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: file.name,
+        content_type: file.type || "image/jpeg",
+        data: base64Payload,
+      }),
+    });
+    aiJson = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(aiJson?.detail || aiJson?.error || `FastAPI request failed (${res.status})`);
+  } catch (err) {
+    setInfoHtml(`<span style="color:#ff7b72">AI error: ${err.message}</span>`);
+    return;
+  }
+
+  currentHolds = Array.isArray(aiJson?.holds) ? aiJson.holds : [];
+
+  // 2) Backend only runs pathfinder.py using the image + holds
+  const result = await apiJson("/api/wall/analyze", {
+    method: "POST",
+    body: JSON.stringify({
+      imageBase64,
+      filename: file.name,
+      holds: currentHolds,
+    }),
+  });
+
+  currentCoach = result.coach || null;
+
+  // Wait for the image to load so we know dimensions
+  wallImage.onload = () => {
+    const w = wallImage.naturalWidth || wallImage.width;
+    const h = wallImage.naturalHeight || wallImage.height;
+    renderHolds(currentHolds, w, h);
+    showCoachSummary(currentCoach);
+  };
+  wallImage.src = URL.createObjectURL(file);
 }
 
 function setupWallImageUpload() {
@@ -96,16 +208,18 @@ function setupWallImageUpload() {
 
     const file = input.files?.[0];
     if (!file) return;
-    wallImage.src = URL.createObjectURL(file);
-    wallImage.onload = () => renderHolds(demoHolds);
+    analyzeWall(file).catch((err) => {
+      setInfoHtml(`<span style="color:#ff7b72">${err.message}</span>`);
+    });
   });
 
   input.addEventListener("change", () => {
     const file = input.files[0];
     if (!file) return;
 
-    wallImage.src = URL.createObjectURL(file);
-    wallImage.onload = () => renderHolds(demoHolds);
+    analyzeWall(file).catch((err) => {
+      setInfoHtml(`<span style="color:#ff7b72">${err.message}</span>`);
+    });
   });
 }
 

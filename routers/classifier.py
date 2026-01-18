@@ -3,7 +3,7 @@ import binascii
 import os
 import sys
 import tempfile
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 sys.path.append("..")
 
@@ -35,6 +35,7 @@ class ImageResponse(BaseModel):
     size: int
     message: str
     classifications: List[Dict[str, float]]
+    holds: Optional[List[Dict[str, object]]] = None
     
 router = APIRouter(
     prefix="/classifier",
@@ -49,7 +50,7 @@ def get_db():
     finally:
         db.close()
 
-def classify_image(detector, classifier, image_bytes: bytes, device: str) -> List[Dict[str, float]]:
+def detect_results(detector, classifier, image_bytes: bytes, device: str):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         tmp.write(image_bytes)
         tmp_path = tmp.name
@@ -68,14 +69,32 @@ def classify_image(detector, classifier, image_bytes: bytes, device: str) -> Lis
         except OSError:
             pass
 
-    # Build probability distributions for each detected hold.
+    return results
+
+
+def build_classifications(results: list) -> List[Dict[str, float]]:
     return [
-        {
-            class_name: float(prob)
-            for class_name, prob in zip(CLASS_NAMES, det["probs"].tolist())
-        }
+        {class_name: float(prob) for class_name, prob in zip(CLASS_NAMES, det["probs"].tolist())}
         for det in results
     ]
+
+
+def build_holds(results: list) -> List[Dict[str, object]]:
+    holds: List[Dict[str, object]] = []
+    for i, det in enumerate(results):
+        box = det.get("box")
+        if box is None:
+            continue
+        x1, y1, x2, y2 = [int(v) for v in box]
+        holds.append(
+            {
+                "id": i,
+                "bbox": [x1, y1, x2, y2],
+                "type": det.get("class_name"),
+                "confidence": float(det.get("confidence", 0.0)),
+            }
+        )
+    return holds
 
 
 @router.post("/upload", response_model=ImageResponse)
@@ -103,12 +122,15 @@ async def upload_image(payload: ImagePayload, db_session=Depends(get_db)):
     if "CLASSIFIER_INSTANCE" not in globals():
         CLASSIFIER_INSTANCE = load_classifier(CONVNEXT_MODEL, DEVICE)
 
-    classifications = classify_image(
+    results = detect_results(
         DETECTOR_INSTANCE,
         CLASSIFIER_INSTANCE,
         binary_content,
         device=DEVICE,
     )
+
+    classifications = build_classifications(results)
+    holds = build_holds(results)
 
 
     # Return classification results, last step
@@ -118,4 +140,5 @@ async def upload_image(payload: ImagePayload, db_session=Depends(get_db)):
         size=len(binary_content),
         message="Image uploaded successfully",
         classifications=classifications,
+        holds=holds,
     )

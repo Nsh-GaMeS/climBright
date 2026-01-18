@@ -8,3 +8,11 @@
 *.jpg
 __pycache__/
 users.db
+users.db-*
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Local databases / uploads
+db/**
+!db/**/.gitkeep

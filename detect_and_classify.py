@@ -15,8 +15,8 @@ from ultralytics import YOLO
 # =========================
 # CONFIGURATION
 # =========================
-YOLO_MODEL = "runs/detect/train2/weights/best.pt"
-CONVNEXT_MODEL = "best_convnext_two_phase.pt"
+YOLO_MODEL = os.environ.get("YOLO_MODEL_PATH", "runs/detect/train2/weights/best.pt")
+CONVNEXT_MODEL = os.environ.get("CONVNEXT_MODEL_PATH", "best_convnext_two_phase.pt")
 NUM_CLASSES = 6
 CLASS_NAMES = ["Jug", "Crimp", "Pinch", "Pocket", "Sloper", "Volume"]
 YOLO_CONF_THRESHOLD = 0.25  # Lower threshold since we're re-classifying
@@ -37,6 +37,11 @@ classify_transform = transforms.Compose([
 
 def load_classifier(checkpoint_path, device):
     """Load the ConvNeXt classifier."""
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(
+            f"ConvNeXt checkpoint not found: {checkpoint_path}. "
+            "Place best_convnext_two_phase.pt in the climBright folder or set CONVNEXT_MODEL_PATH."
+        )
     print(f"Loading classifier from {checkpoint_path}...")
     model = timm.create_model(
         "convnext_tiny.in12k_ft_in1k",
@@ -53,6 +58,11 @@ def load_classifier(checkpoint_path, device):
 
 def load_detector(model_path):
     """Load the YOLO detector."""
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f"YOLO weights not found: {model_path}. "
+            "Train/export weights or set YOLO_MODEL_PATH to a valid best.pt."
+        )
     print(f"Loading YOLO detector from {model_path}...")
     detector = YOLO(model_path)
     print("✓ Detector loaded")
