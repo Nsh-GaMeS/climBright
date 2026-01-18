@@ -1,10 +1,15 @@
 # climBright
-A rock climbing hold classifier
+An App for rock climbers.
+- Upload images of climbing holds to classify them.
+- Upload wall photos to detect holds and get climbing route suggestions.
+- Built with FastAPI, MongoDB, YOLOv8, ConvNeXt, and many climbing enthusiasts.
 
 ## Run Everything (Local)
 
 ### 0) Prereqs
-- MongoDB server (`mongod`) installed (macOS: `brew install mongodb-community@7.0`)
+- MongoDB server (`mongod`)
+    - macOS: `brew install mongodb-community@7.0`
+    - Windows: `choco install mongodb`
 - Python 3.10+ and Node 18+
 
 ### 1) Put model weights in place
@@ -15,40 +20,46 @@ If your files live somewhere else, set env vars when starting FastAPI:
 - `CONVNEXT_MODEL_PATH=/absolute/path/to/best_convnext_two_phase.pt`
 - `YOLO_MODEL_PATH=/absolute/path/to/best.pt`
 
+### Note: Make a python venv (optional but recommended)
+
+MacOS / Linux
+```bash
+python3 -m venv venv
+source venv/bin/activate  # macOS/Linux
+```
+
+Windows
+```bash
+python -m venv venv
+venv\Scripts\activate.ps1 # Windows PowerShell
+```
+
 ### 2) Install Python deps
 ```bash
-cd climBright
 pip3 install -r requirements.txt
 ```
 
 ### 3) Start MongoDB (Terminal 1)
 ```bash
-cd climBright
-./scripts/start_mongo.sh
+mongod --dbpath ./db/mongo --bind_ip 127.0.0.1 --port 2701
 ```
 
 ### 4) Start FastAPI on port 9000 (Terminal 2)
 ```bash
-cd climBright
-
-# optional overrides
-export CONVNEXT_MODEL_PATH="./best_convnext_two_phase.pt"
-export YOLO_MODEL_PATH="./runs/detect/train2/weights/best.pt"
-
-# allow browser calls from the web server origin
-export FRONTEND_ORIGINS="http://127.0.0.1:6769,http://localhost:6769"
-
-./scripts/start_fastapi.sh 9000
+uvicorn main:app --reload --port 9000
 ```
 
 ### 5) Start the web app (Terminal 3)
 ```bash
-cd climBright
-./scripts/start_web.sh
+cd frontend
+npm install
+npm run start
 ```
 
+# MAKE SURE TO ADD A .env FILE IN THE FRONTEND FOLDER
+
 Open:
-- `http://127.0.0.1:6769/login`
+- `http://127.0.0.1:3000/`
 
 ### 6) Smoke test
 - Register / log in

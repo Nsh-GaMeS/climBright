@@ -1,5 +1,4 @@
-from pydantic import Json
-from sqlalchemy import Column, Integer, LargeBinary, String, DateTime, ForeignKey, Float
+from sqlalchemy import Column, Integer, LargeBinary, String, DateTime, ForeignKey, Float, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -28,7 +27,7 @@ class Image(Base):
     )
     data = Column(LargeBinary, nullable=False)
     content_type = Column(String, nullable=False)
-    path_found = Column(Json, nullable=True)
+    path_found = Column(JSON, nullable=True)
 
 
 class Classification(Base):
