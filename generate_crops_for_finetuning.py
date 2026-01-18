@@ -129,31 +129,31 @@ def main():
         description="Generate classifier crops from raw images using YOLO detector"
     )
     parser.add_argument(
-        '--yolo',
+        '-y', '--yolo',
         type=str,
         default=YOLO_MODEL,
         help='Path to YOLO model'
     )
     parser.add_argument(
-        '--train',
+        '-t', '--train',
         type=str,
         default='indoor-climbing-gym-hold-classification-dataset/Final_Dataset/train/images',
         help='Path to training images'
     )
     parser.add_argument(
-        '--val',
+        '-v', '--val',
         type=str,
         default='indoor-climbing-gym-hold-classification-dataset/Final_Dataset/valid/images',
         help='Path to validation images'
     )
     parser.add_argument(
-        '--test',
+        '-e', '--test',
         type=str,
         default='indoor-climbing-gym-hold-classification-dataset/Final_Dataset/test/images',
         help='Path to test images'
     )
     parser.add_argument(
-        '--output',
+        '-o', '--output',
         type=str,
         default=OUTPUT_DIR,
         help='Output directory for crops'

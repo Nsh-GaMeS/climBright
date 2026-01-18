@@ -1,3 +1,4 @@
+from pydantic import Json
 from sqlalchemy import Column, Integer, LargeBinary, String, DateTime, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -18,7 +19,7 @@ class Image(Base):
     __tablename__ = "images"
     
     id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String, unique=True, index=True, nullable=False)
+    filename = Column(String, index=True, nullable=False)
     upload_time = Column(DateTime, default=datetime.utcnow)
     classifications = relationship(
         "Classification",
@@ -27,6 +28,7 @@ class Image(Base):
     )
     data = Column(LargeBinary, nullable=False)
     content_type = Column(String, nullable=False)
+    path_found = Column(Json, nullable=True)
 
 
 class Classification(Base):
