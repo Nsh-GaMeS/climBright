@@ -2,17 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>ClimbAI – Wall Analysis</title>
+  <title>climBright – Wall Analysis</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
 
   <header class="navbar">
-    <h1><a class="brand" href="/holds">ClimbAI</a></h1>
+    <h1><a class="brand" href="/holds">climBright</a></h1>
     <nav>
-      <a href="/holds">Hold Classifier</a>
-      <a class="active" href="/wall">Wall Analysis</a>
+      <a href="/holds">Hold Buddy</a>
+      <a class="active" href="/wall">Wall Buddy (analysis)</a>
     </nav>
 
     <div class="auth-bar">
@@ -39,6 +39,7 @@
       <div class="wall-container">
         <div class="image-wrapper" id="wallImageWrapper">
           <img id="wallImage" alt="Wall" />
+          <svg id="wallOverlay" aria-hidden="true"></svg>
         </div>
 
         <div class="hold-info">

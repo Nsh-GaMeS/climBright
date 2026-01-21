@@ -44,6 +44,7 @@ async function requireSessionOrRedirect() {
 const wallImage = document.getElementById("wallImage");
 const wallWrapper = document.getElementById("wallImageWrapper");
 const holdInfoText = document.getElementById("holdInfoText");
+const overlaySvg = document.getElementById("wallOverlay");
 
 let currentHolds = [];
 let currentCoach = null;
@@ -64,6 +65,138 @@ async function fileToBase64(file) {
       resolve(commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl);
     };
     reader.readAsDataURL(file);
+  });
+}
+
+function svgEl(tag, attrs = {}) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, String(v)));
+  return el;
+}
+
+function clearOverlay() {
+  if (!overlaySvg) return;
+  while (overlaySvg.firstChild) overlaySvg.removeChild(overlaySvg.firstChild);
+}
+
+function bboxToCenter(bbox) {
+  const [x1, y1, x2, y2] = bbox;
+  const cx = (x1 + x2) / 2;
+  const cy = (y1 + y2) / 2;
+  const width = Math.max(1, x2 - x1);
+  const height = Math.max(1, y2 - y1);
+  return { cx, cy, width, height };
+}
+
+function resolveRouteSteps(coach, holds) {
+  if (!coach) return [];
+  const candidates = ["routeA", "route", "routeB"];
+  for (const name of candidates) {
+    const route = coach[name];
+    if (!route) continue;
+    if (Array.isArray(route.steps)) return route.steps;
+    if (Array.isArray(route)) {
+      return route
+        .map((step, idx) => {
+          if (Array.isArray(step?.bbox)) return step;
+          const id = step?.id ?? step?.hold_id ?? step?.holdId;
+          if (id === undefined) return null;
+          const hold = holds.find((h) => String(h.id) === String(id));
+          if (!Array.isArray(hold?.bbox)) return null;
+          return { ...step, bbox: hold.bbox, hold_id: hold.id, instruction: step?.instruction || `Step ${idx + 1}` };
+        })
+        .filter(Boolean);
+    }
+  }
+  return [];
+}
+
+function stepToPoint(step, holds) {
+  if (Array.isArray(step.center_norm) && Array.isArray(step.bbox_wh_norm) && wallImage) {
+    const W = wallImage.naturalWidth || wallImage.width;
+    const H = wallImage.naturalHeight || wallImage.height;
+    const cx = step.center_norm[0] * W;
+    const cy = step.center_norm[1] * H;
+    return { cx, cy };
+  }
+
+  if (Array.isArray(step.bbox)) {
+    const { cx, cy } = bboxToCenter(step.bbox);
+    return { cx, cy };
+  }
+
+  const id = step?.hold_id ?? step?.id ?? step?.holdId;
+  if (id !== undefined) {
+    const hold = holds.find((h) => String(h.id) === String(id));
+    if (Array.isArray(hold?.bbox)) {
+      const { cx, cy } = bboxToCenter(hold.bbox);
+      return { cx, cy };
+    }
+  }
+
+  return null;
+}
+
+function renderOverlay(holds, coach) {
+  if (!overlaySvg || !wallImage) return;
+
+  clearOverlay();
+
+  const imgW = wallImage.naturalWidth || wallImage.width;
+  const imgH = wallImage.naturalHeight || wallImage.height;
+  if (!imgW || !imgH) return;
+
+  overlaySvg.setAttribute("viewBox", `0 0 ${imgW} ${imgH}`);
+  overlaySvg.setAttribute("preserveAspectRatio", "none");
+
+  const steps = resolveRouteSteps(coach, holds);
+  if (!steps.length) return;
+
+  const points = [];
+  const nodes = [];
+  steps.forEach((step, idx) => {
+    const pt = stepToPoint(step, holds);
+    if (!pt) return;
+    points.push(pt);
+    nodes.push({ pt, idx });
+  });
+
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    const line = svgEl("line", {
+      x1: a.cx,
+      y1: a.cy,
+      x2: b.cx,
+      y2: b.cy,
+      stroke: "rgba(61,220,151,0.85)",
+      "stroke-width": 6,
+      "stroke-linecap": "round",
+    });
+    overlaySvg.appendChild(line);
+  }
+
+  nodes.forEach(({ pt, idx }) => {
+    const circle = svgEl("circle", {
+      cx: pt.cx,
+      cy: pt.cy,
+      r: 16,
+      fill: "rgba(14,17,23,0.8)",
+      stroke: "rgba(61,220,151,0.95)",
+      "stroke-width": 4,
+    });
+    overlaySvg.appendChild(circle);
+
+    const text = svgEl("text", {
+      x: pt.cx,
+      y: pt.cy + 6,
+      "text-anchor": "middle",
+      "font-size": 16,
+      "font-weight": 700,
+      fill: "rgba(61,220,151,0.98)",
+    });
+    text.textContent = String(idx + 1);
+    overlaySvg.appendChild(text);
   });
 }
 
@@ -131,6 +264,8 @@ async function analyzeWall(file) {
     holdInfoText.textContent = "Analyzing wall…";
   }
 
+  clearOverlay();
+
   const imageBase64 = await fileToBase64(file);
   const base64Payload = String(imageBase64).includes(",")
     ? String(imageBase64).split(",")[1]
@@ -180,6 +315,7 @@ async function analyzeWall(file) {
     const w = wallImage.naturalWidth || wallImage.width;
     const h = wallImage.naturalHeight || wallImage.height;
     renderHolds(currentHolds, w, h);
+    renderOverlay(currentHolds, currentCoach);
     showCoachSummary(currentCoach);
   };
   wallImage.src = URL.createObjectURL(file);
