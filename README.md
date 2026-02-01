@@ -4,6 +4,11 @@ An App for rock climbers.
 - Upload wall photos to detect holds and get climbing route suggestions.
 - Built with FastAPI, MongoDB, YOLOv8, ConvNeXt, and many climbing enthusiasts.
 
+<div style="display: flex; flex-wrap: wrap;">
+  <img src="images/Screenshot 2026-01-31 194827.png" alt="easy 5 crimps" style="width: 50%; padding: 5px;">
+  <img src="images/Screenshot 2026-01-31 195233.png" alt="altitude route" style="width: 50%; padding: 5px;">
+</div>
+
 ## Run Everything (Local)
 
 ### 0) Prereqs

@@ -111,6 +111,25 @@ function resolveRouteSteps(coach, holds) {
   return [];
 }
 
+function findHoldStepIndex(hold, coach, holds) {
+  const steps = resolveRouteSteps(coach, holds);
+  for (let i = 0; i < steps.length; i += 1) {
+    const step = steps[i];
+    const stepId = step?.hold_id ?? step?.id ?? step?.holdId;
+    if (stepId !== undefined && hold?.id !== undefined) {
+      if (String(stepId) === String(hold.id)) return i;
+    }
+
+    if (Array.isArray(step?.bbox) && Array.isArray(hold?.bbox)) {
+      const matchesBbox =
+        step.bbox.length === hold.bbox.length &&
+        step.bbox.every((val, idx) => Math.abs(Number(val) - Number(hold.bbox[idx])) < 1e-3);
+      if (matchesBbox) return i;
+    }
+  }
+  return -1;
+}
+
 function stepToPoint(step, holds) {
   if (Array.isArray(step.center_norm) && Array.isArray(step.bbox_wh_norm) && wallImage) {
     const W = wallImage.naturalWidth || wallImage.width;
@@ -233,9 +252,14 @@ function selectHold(hold) {
   const inRouteB = Array.isArray(currentCoach?.routeB)
     ? currentCoach.routeB.some((h) => h.id === hold.id)
     : false;
+  const stepIdx = findHoldStepIndex(hold, currentCoach, currentHolds);
+  const overlayNumber = stepIdx >= 0 ? stepIdx + 1 : hold.id;
 
   setInfoHtml(
     `
+    <strong>Hold ID:</strong> ${overlayNumber}${
+      stepIdx >= 0 ? ` (detector ID ${hold.id})` : ""
+    }<br/>
     <strong>Type:</strong> ${hold.type || "Unknown"}<br/>
     <strong>Confidence:</strong> ${pct.toFixed(1)}%<br/>
     <strong>In Route A:</strong> ${inRouteA ? "Yes" : "No"}<br/>
@@ -307,7 +331,6 @@ async function analyzeWall(file) {
       holds: currentHolds,
     }),
   });
-
   currentCoach = result.coach || null;
 
   // Wait for the image to load so we know dimensions
