@@ -47,6 +47,15 @@ const overlaySvg = document.getElementById("wallOverlay");
 const coachSummary = document.getElementById("coachSummary");
 const coachContent = document.getElementById("coachContent");
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 let currentHolds = [];
 let currentCoach = null;
 let selectedMarkerEl = null;
@@ -237,11 +246,14 @@ function selectHold(hold) {
   if (inA >= 0) routeInfo += `<span style="color:${ROUTE_STYLES.A.labelColor}">Route A step #${inA + 1}</span><br/>`;
   if (inB >= 0) routeInfo += `<span style="color:${ROUTE_STYLES.B.labelColor}">Route B step #${inB + 1}</span><br/>`;
 
+  const safeType = escapeHtml(hold.type || "Unknown");
+  const safeHoldId = escapeHtml(hold.id);
+
   setInfoHtml(`
-    <strong>Type:</strong> ${hold.type || "Unknown"}<br/>
+    <strong>Type:</strong> ${safeType}<br/>
     <strong>Confidence:</strong> ${pct}%<br/>
     ${routeInfo}
-    <strong>Hold ID:</strong> ${hold.id}
+    <strong>Hold ID:</strong> ${safeHoldId}
   `);
   holdInfoText.classList.remove('fade-in-up'); void holdInfoText.offsetWidth; holdInfoText.classList.add('fade-in-up');
 }
@@ -251,12 +263,13 @@ function renderCoachSummary(coach) {
 
   const diff = (coach.difficulty || "Unknown").toLowerCase();
   const diffClass = diff === "easy" ? "easy" : diff === "hard" ? "hard" : "moderate";
-  const notes = coach.notes || "No additional notes.";
+  const notes = escapeHtml(coach.notes || "No additional notes.");
+  const safeDifficulty = escapeHtml(coach.difficulty || "Unknown");
   const routeALen = Array.isArray(coach.routeA) ? coach.routeA.length : 0;
   const routeBLen = Array.isArray(coach.routeB) ? coach.routeB.length : 0;
 
   coachContent.innerHTML = `
-    <p><strong>Difficulty:</strong> <span class="difficulty-badge ${diffClass}">${coach.difficulty || "Unknown"}</span></p>
+    <p><strong>Difficulty:</strong> <span class="difficulty-badge ${diffClass}">${safeDifficulty}</span></p>
     <div class="route-legend" style="margin-top:0.75rem">
       <p><span style="color:${ROUTE_STYLES.A.labelColor}; font-weight:600">━━ Route A</span> (standard) — ${routeALen} holds</p>
       ${routeBLen ? `<p><span style="color:${ROUTE_STYLES.B.labelColor}; font-weight:600">╌╌ Route B</span> (harder) — ${routeBLen} holds</p>` : ""}
@@ -299,7 +312,7 @@ async function analyzeWall(file) {
     aiJson = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(aiJson?.detail || aiJson?.error || `FastAPI error (${res.status})`);
   } catch (err) {
-    setInfoHtml(`<span style="color:var(--danger)">AI error: ${err.message}</span>`);
+    setInfoHtml(`<span style="color:var(--danger)">AI error: ${escapeHtml(err.message)}</span>`);
     return;
   }
 
@@ -313,7 +326,7 @@ async function analyzeWall(file) {
       body: JSON.stringify({ imageBase64, filename: file.name, holds: currentHolds }),
     });
   } catch (err) {
-    setInfoHtml(`<span style="color:var(--danger)">Route error: ${err.message}</span>`);
+    setInfoHtml(`<span style="color:var(--danger)">Route error: ${escapeHtml(err.message)}</span>`);
     wallImage.onload = () => {
       const w = wallImage.naturalWidth, h = wallImage.naturalHeight;
       renderHolds(currentHolds, w, h);
@@ -357,12 +370,12 @@ function setupWallImageUpload() {
     box.classList.remove("dragover");
     input.files = e.dataTransfer.files;
     const file = input.files?.[0];
-    if (file) analyzeWall(file).catch((err) => setInfoHtml(`<span style="color:var(--danger)">${err.message}</span>`));
+    if (file) analyzeWall(file).catch((err) => setInfoHtml(`<span style="color:var(--danger)">${escapeHtml(err.message)}</span>`));
   });
 
   input.addEventListener("change", () => {
     const file = input.files[0];
-    if (file) analyzeWall(file).catch((err) => setInfoHtml(`<span style="color:var(--danger)">${err.message}</span>`));
+    if (file) analyzeWall(file).catch((err) => setInfoHtml(`<span style="color:var(--danger)">${escapeHtml(err.message)}</span>`));
   });
 }
 
