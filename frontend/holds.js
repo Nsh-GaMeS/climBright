@@ -45,6 +45,15 @@ const holdImage = document.getElementById("holdImage");
 const holdImageWrapper = document.getElementById("holdImageWrapper");
 const holdOverlay = document.getElementById("holdOverlay");
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 // --- Result display ---
 function showLoading() {
   if (resultText) {
@@ -70,8 +79,9 @@ function showHoldsList(holds, bestIdx) {
     const conf = getHoldConfidence(h);
     const pct = (conf <= 1 ? conf * 100 : conf).toFixed(1);
     const isBest = i === bestIdx;
+    const safeLabel = escapeHtml(label);
     return `<li class="${isBest ? "best" : ""}" data-hold-idx="${i}">
-      <span class="hold-label">${label}${isBest ? " ★" : ""}</span>
+      <span class="hold-label">${safeLabel}${isBest ? " ★" : ""}</span>
       <span class="hold-conf">${pct}%</span>
     </li>`;
   }).join("");
